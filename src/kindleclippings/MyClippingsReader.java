@@ -42,6 +42,7 @@ public class MyClippingsReader {
 		String empty = reader.readLine();
 		if (empty.length() > 0) {
 			System.err.println("empty line was not empty, but " + empty);
+			return null;
 		}
 		String content = reader.readLine();
 		content = content.replace("\uFEFF", "");

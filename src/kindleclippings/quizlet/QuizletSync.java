@@ -190,108 +190,126 @@ public class QuizletSync {
 	public static void main(String[] args) throws IOException, JSONException,
 			URISyntaxException, InterruptedException, BackingStoreException {
 
-		Map<String, List<Clipping>> books = readClippingsFile();
-
-		if (books == null)
-			return;
-
-		if (books.isEmpty()) {
-			JOptionPane.showMessageDialog(null, "no clippings to be uploaded",
-					"QuizletSync", JOptionPane.OK_OPTION);
-			return;
-		}
-
 		ProgressMonitor progress = new ProgressMonitor(null, "QuizletSync",
-				"checking Quizlet library", 0, 10 + books.size());
-		progress.setMillisToPopup(10);
-		progress.setMillisToDecideToPopup(5);
-
-		Preferences prefs = getPrefs();
-
-		QuizletAPI api = new QuizletAPI(prefs.get("access_token", null));
-
-		Collection<TermSet> sets = null;
+				"loading Kindle clippings file", 0, 100);
+		progress.setMillisToPopup(0);
+		progress.setMillisToDecideToPopup(0);
+		progress.setProgress(0);
 		try {
-			sets = api.getSets(prefs.get("user_id", null));
-		} catch (IOException e) {
-			if (e.toString().contains("401")) {
-				// Not Authorized => Token has been revoked
-				clearPrefs();
-				prefs = getPrefs();
-				api = new QuizletAPI(prefs.get("access_token", null));
+
+			Map<String, List<Clipping>> books = readClippingsFile();
+
+			if (books == null)
+				return;
+
+			if (books.isEmpty()) {
+				JOptionPane.showMessageDialog(null,
+						"no clippings to be uploaded", "QuizletSync",
+						JOptionPane.OK_OPTION);
+				return;
+			}
+			progress.setNote("checking Quizlet account");
+			progress.setProgress(5);
+
+			Preferences prefs = getPrefs();
+
+			QuizletAPI api = new QuizletAPI(prefs.get("access_token", null));
+
+			Collection<TermSet> sets = null;
+			try {
+				progress.setNote("checking Quizlet library");
+				progress.setProgress(10);
 				sets = api.getSets(prefs.get("user_id", null));
-			} else {
-				throw e;
-			}
-		}
-
-		progress.setProgress(10);
-		progress.setNote("uploading new notes");
-
-		Map<String, TermSet> indexedSets = new HashMap<String, TermSet>(
-				sets.size());
-
-		for (TermSet t : sets) {
-			indexedSets.put(t.getTitle(), t);
-		}
-
-		int pro = 10;
-		int createdSets = 0;
-		int createdTerms = 0;
-		int updatedTerms = 0;
-		for (List<Clipping> c : books.values()) {
-			progress.setProgress(pro++);
-			String book = c.get(0).getBook();
-			TermSet termSet = indexedSets.get(book);
-			if (termSet == null) {
-				if (c.size() < 2) {
-					System.err.println("ignored [" + book
-							+ "] (need at least two notes)");
-					continue;
+			} catch (IOException e) {
+				if (e.toString().contains("401")) {
+					// Not Authorized => Token has been revoked
+					clearPrefs();
+					prefs = getPrefs();
+					api = new QuizletAPI(prefs.get("access_token", null));
+					sets = api.getSets(prefs.get("user_id", null));
+				} else {
+					throw e;
 				}
+			}
 
-				addSet(api, book, c);
-				createdSets++;
-				createdTerms += c.size();
-				continue;
-			} // compare against existing terms
-			clipping: for (Clipping cl : c) {
-				// case-insensitive and ignore non-letters
-				String check = sanitize(cl.getContent().toLowerCase())
-						.replaceAll("\\W", "");
-				Collection<Term> terms = termSet.getTerms();
-				for (Term t : terms) {
-					String x = t.getTerm() + t.getDefinition();
-					x = x.toLowerCase().replaceAll("\\W", "");
-					if (x.startsWith(check)) {
-						if (x.length() == check.length())
-							continue clipping;
-						if (x.equals(check + check))
-							continue clipping;
+			progress.setProgress(15);
+			progress.setMaximum(15 + books.size());
+			progress.setNote("uploading new notes");
+
+			Map<String, TermSet> indexedSets = new HashMap<String, TermSet>(
+					sets.size());
+
+			for (TermSet t : sets) {
+				indexedSets.put(t.getTitle(), t);
+			}
+
+			int pro = 15;
+			int createdSets = 0;
+			int createdTerms = 0;
+			int updatedTerms = 0;
+			for (List<Clipping> c : books.values()) {
+
+				String book = c.get(0).getBook();
+				progress.setNote(book);
+				progress.setProgress(pro++);
+
+				TermSet termSet = indexedSets.get(book);
+				if (termSet == null) {
+					if (c.size() < 2) {
+						System.err.println("ignored [" + book
+								+ "] (need at least two notes)");
+						continue;
 					}
-				}
-				addTerm(api, termSet, cl);
-				updatedTerms++;
 
+					addSet(api, book, c);
+					createdSets++;
+					createdTerms += c.size();
+					continue;
+				} // compare against existing terms
+				clipping: for (Clipping cl : c) {
+					// case-insensitive and ignore non-letters
+					String check = sanitize(cl.getContent().toLowerCase())
+							.replaceAll("\\W", "");
+					Collection<Term> terms = termSet.getTerms();
+					for (Term t : terms) {
+						String x = t.getTerm() + t.getDefinition();
+						x = x.toLowerCase().replaceAll("\\W", "");
+						if (x.startsWith(check)) {
+							if (x.length() == check.length())
+								continue clipping;
+							if (x.equals(check + check))
+								continue clipping;
+						}
+					}
+					addTerm(api, termSet, cl);
+					updatedTerms++;
+
+				}
 			}
+			progress.setProgress(pro++);
+
+			if (createdSets == 0 && updatedTerms == 0) {
+				JOptionPane.showMessageDialog(null,
+						"Done.\nNo new data was uploaded", "QuizletSync",
+						JOptionPane.OK_OPTION);
+			} else if (createdSets > 0) {
+				JOptionPane
+						.showMessageDialog(
+								null,
+								String.format(
+										"Done.\nCreated %d new sets with %d cards, and added %d cards to existing sets",
+										createdSets, createdTerms, updatedTerms),
+								"QuizletSync", JOptionPane.OK_OPTION);
+			} else {
+				JOptionPane.showMessageDialog(null,
+						String.format("Done.\nAdded %d cards to existing sets",
+								updatedTerms), "QuizletSync",
+						JOptionPane.OK_OPTION);
+			}
+		} finally {
+			progress.close();
 		}
-		progress.setProgress(pro++);
-		if (createdSets == 0 && updatedTerms == 0) {
-			JOptionPane.showMessageDialog(null,
-					"Done.\nNo new data was uploaded", "QuizletSync",
-					JOptionPane.OK_OPTION);
-		} else if (createdSets > 0) {
-			JOptionPane
-					.showMessageDialog(
-							null,
-							String.format(
-									"Done.\nCreated %d new sets with %d cards, and added %d cards to existing sets",
-									createdSets, createdTerms, updatedTerms),
-							"QuizletSync", JOptionPane.OK_OPTION);
-		} else {
-			JOptionPane.showMessageDialog(null, String.format(
-					"Done.\nAdded %d cards to existing sets", updatedTerms),
-					"QuizletSync", JOptionPane.OK_OPTION);
-		}
+
+		System.exit(0);
 	}
 }
