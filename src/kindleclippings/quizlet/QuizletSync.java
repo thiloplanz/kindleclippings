@@ -83,6 +83,12 @@ public class QuizletSync {
 		int c = term.lastIndexOf(',');
 		if (c > half)
 			half = c;
+		c = term.lastIndexOf(';');
+		if (c > half)
+			half = c;
+		c = term.lastIndexOf(':');
+		if (c > half)
+			half = c;
 		if (half > 10) {
 			term = term.substring(0, half + 1);
 		}
