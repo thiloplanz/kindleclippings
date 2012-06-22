@@ -73,7 +73,7 @@ public class QuizletSync {
 		return s;
 	}
 
-	private static Term makeTerm(Clipping cl) {
+	public static Term makeTerm(Clipping cl) {
 		String x = cl.getContent();
 		// split in half
 		int half = x.length() / 2;
@@ -94,7 +94,7 @@ public class QuizletSync {
 		}
 		// make sure we split between words
 		int nextSpace = x.indexOf(' ', term.length());
-		if (nextSpace >= x.length())
+		if (nextSpace >= x.length() || nextSpace == -1)
 			// go backwards
 			nextSpace = x.lastIndexOf(' ', term.length());
 
@@ -106,7 +106,7 @@ public class QuizletSync {
 		return new Term(sanitize(term), sanitize(def));
 	}
 
-	private static void addTerm(QuizletAPI api, TermSet termSet, Clipping cl)
+	public static void addTerm(QuizletAPI api, TermSet termSet, Clipping cl)
 			throws ClientProtocolException, IOException {
 		Term term = makeTerm(cl);
 		api.addTermToSet(termSet.getId(), term);
@@ -165,7 +165,7 @@ public class QuizletSync {
 		}
 	}
 
-	private static Preferences getPrefs() throws IOException,
+	public static Preferences getPrefs() throws IOException,
 			URISyntaxException, InterruptedException, JSONException,
 			BackingStoreException {
 		Preferences prefs = Preferences.userNodeForPackage(QuizletSync.class);
@@ -187,10 +187,28 @@ public class QuizletSync {
 		return prefs;
 	}
 
-	private static void clearPrefs() throws BackingStoreException {
+	public static void clearPrefs() throws BackingStoreException {
 		Preferences prefs = Preferences.userNodeForPackage(QuizletSync.class);
 		prefs.clear();
 		prefs.flush();
+	}
+
+	public static boolean checkExistingTerm(Clipping cl, TermSet termSet) {
+		// case-insensitive and ignore non-letters
+		String check = sanitize(cl.getContent().toLowerCase()).replaceAll(
+				"\\W", "");
+		Collection<Term> terms = termSet.getTerms();
+		for (Term t : terms) {
+			String x = t.getTerm() + t.getDefinition();
+			x = x.toLowerCase().replaceAll("\\W", "");
+			if (x.startsWith(check)) {
+				if (x.length() == check.length())
+					return true;
+				if (x.equals(check + check))
+					return true;
+			}
+		}
+		return false;
 	}
 
 	public static void main(String[] args) throws IOException, JSONException,
@@ -271,25 +289,13 @@ public class QuizletSync {
 					createdSets++;
 					createdTerms += c.size();
 					continue;
-				} // compare against existing terms
-				clipping: for (Clipping cl : c) {
-					// case-insensitive and ignore non-letters
-					String check = sanitize(cl.getContent().toLowerCase())
-							.replaceAll("\\W", "");
-					Collection<Term> terms = termSet.getTerms();
-					for (Term t : terms) {
-						String x = t.getTerm() + t.getDefinition();
-						x = x.toLowerCase().replaceAll("\\W", "");
-						if (x.startsWith(check)) {
-							if (x.length() == check.length())
-								continue clipping;
-							if (x.equals(check + check))
-								continue clipping;
-						}
+				}
+				// compare against existing terms
+				for (Clipping cl : c) {
+					if (!checkExistingTerm(cl, termSet)) {
+						addTerm(api, termSet, cl);
+						updatedTerms++;
 					}
-					addTerm(api, termSet, cl);
-					updatedTerms++;
-
 				}
 			}
 			progress.setProgress(pro++);
