@@ -35,11 +35,25 @@ class WordClippingsReader {
 	WordClippingsReader(InputStream doc) throws IOException {
 
 		WordExtractor extractor = new WordExtractor(doc);
+
 		paragraphs = extractor.getParagraphText();
 
-		// first paragraph is the book title
-		Clipping c = readClipping();
-		book = c.getContent().replace('\n', ' ').trim();
+		// join all paragraphs up to the first empty one to make up the title
+		int i = 0;
+		StringBuilder title = new StringBuilder();
+		for (String a : paragraphs) {
+			if (a.trim().isEmpty()) {
+				if (title.length() > 0)
+					break;
+			} else {
+				title.append(" ");
+			}
+			title.append(a);
+			i++;
+		}
+
+		book = title.toString().replaceAll("\r?\n", " ").trim();
+		index = i;
 	}
 
 	Clipping readClipping() {

@@ -44,7 +44,7 @@ class RTFClippingsReader {
 
 		// first paragraph is the book title
 		Clipping c = readClipping();
-		book = c.getContent().replace('\n', ' ').trim();
+		book = c.getContent().replaceAll("\r?\n", " ").trim();
 	}
 
 	Clipping readClipping() throws IOException {

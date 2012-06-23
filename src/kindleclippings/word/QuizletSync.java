@@ -24,9 +24,7 @@ import java.io.InputStream;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 
@@ -121,7 +119,7 @@ public class QuizletSync {
 			BadLocationException {
 
 		ProgressMonitor progress = new ProgressMonitor(null, "QuizletSync",
-				"loading Kindle clippings file", 0, 100);
+				"loading notes file", 0, 100);
 		progress.setMillisToPopup(0);
 		progress.setMillisToDecideToPopup(0);
 		progress.setProgress(0);
@@ -133,9 +131,8 @@ public class QuizletSync {
 				return;
 
 			if (clippings.isEmpty()) {
-				JOptionPane.showMessageDialog(null,
-						"no clippings to be uploaded", "QuizletSync",
-						JOptionPane.OK_OPTION);
+				JOptionPane.showMessageDialog(null, "no notes to be uploaded",
+						"QuizletSync", JOptionPane.OK_OPTION);
 				return;
 			}
 
@@ -174,20 +171,22 @@ public class QuizletSync {
 			progress.setMaximum(15 + clippings.size());
 			progress.setNote("uploading new notes");
 
-			Map<String, TermSet> indexedSets = new HashMap<String, TermSet>(
-					sets.size());
-
-			for (TermSet t : sets) {
-				indexedSets.put(t.getTitle(), t);
-			}
-
 			int pro = 15;
 
 			String book = clippings.get(0).getBook();
 			progress.setNote(book);
 			progress.setProgress(pro++);
 
-			TermSet termSet = indexedSets.get(book);
+			TermSet termSet = null;
+			String x = book.toLowerCase().replaceAll("\\W", "");
+
+			for (TermSet t : sets) {
+				if (t.getTitle().toLowerCase().replaceAll("\\W", "").equals(x)) {
+					termSet = t;
+					break;
+				}
+			}
+
 			if (termSet == null) {
 
 				addSet(api, book, clippings);
