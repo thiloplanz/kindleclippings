@@ -53,17 +53,8 @@ public class QuizletSync {
 		System.err.println("created set [" + book + "]");
 	}
 
-	private static List<Clipping> readClippingsFile() throws IOException,
-			BadLocationException {
-
-		JFileChooser fc = new JFileChooser();
-		fc.setFileFilter(new FileNameExtensionFilter("Word documents", "doc",
-				"rtf"));
-		int result = fc.showOpenDialog(null);
-		if (result != JFileChooser.APPROVE_OPTION) {
-			return null;
-		}
-		File cl = fc.getSelectedFile();
+	private static List<Clipping> readClippingsFile(File cl)
+			throws IOException, BadLocationException {
 
 		InputStream in = new FileInputStream(cl);
 
@@ -118,30 +109,24 @@ public class QuizletSync {
 			URISyntaxException, InterruptedException, BackingStoreException,
 			BadLocationException {
 
+		JFileChooser fc = new JFileChooser();
+		fc.setFileFilter(new FileNameExtensionFilter("Word documents", "doc",
+				"rtf"));
+		fc.setMultiSelectionEnabled(true);
+		int result = fc.showOpenDialog(null);
+		if (result != JFileChooser.APPROVE_OPTION) {
+			return;
+		}
+		File[] clf = fc.getSelectedFiles();
+		if (clf == null || clf.length == 0)
+			return;
+
 		ProgressMonitor progress = new ProgressMonitor(null, "QuizletSync",
-				"loading notes file", 0, 100);
+				"loading notes files", 0, 100);
 		progress.setMillisToPopup(0);
 		progress.setMillisToDecideToPopup(0);
 		progress.setProgress(0);
 		try {
-
-			List<Clipping> clippings = readClippingsFile();
-
-			if (clippings == null)
-				return;
-
-			if (clippings.isEmpty()) {
-				JOptionPane.showMessageDialog(null, "no notes to be uploaded",
-						"QuizletSync", JOptionPane.OK_OPTION);
-				return;
-			}
-
-			if (clippings.size() < 2) {
-				JOptionPane.showMessageDialog(null,
-						"need at least two notes to make a set", "QuizletSync",
-						JOptionPane.OK_OPTION);
-				return;
-			}
 
 			progress.setNote("checking Quizlet account");
 			progress.setProgress(5);
@@ -168,60 +153,95 @@ public class QuizletSync {
 			}
 
 			progress.setProgress(15);
-			progress.setMaximum(15 + clippings.size());
+			progress.setMaximum(15 + clf.length * 10);
 			progress.setNote("uploading new notes");
 
 			int pro = 15;
 
-			String book = clippings.get(0).getBook();
-			progress.setNote(book);
-			progress.setProgress(pro++);
-
-			TermSet termSet = null;
-			String x = book.toLowerCase().replaceAll("\\W", "");
-
-			for (TermSet t : sets) {
-				if (t.getTitle().toLowerCase().replaceAll("\\W", "").equals(x)) {
-					termSet = t;
-					break;
-				}
-			}
-
-			if (termSet == null) {
-
-				addSet(api, book, clippings);
-				progress.setProgress(pro += clippings.size());
-				JOptionPane
-						.showMessageDialog(null, String.format(
-								"Done.\nCreated a new set with %d cards",
-								clippings.size()), "QuizletSync",
-								JOptionPane.OK_OPTION);
-				return;
-
-			}
-
+			int addedSets = 0;
 			int updatedTerms = 0;
+			int updatedSets = 0;
 
-			// compare against existing terms
-			for (Clipping cl : clippings) {
-				if (!kindleclippings.quizlet.QuizletSync.checkExistingTerm(cl,
-						termSet)) {
-					kindleclippings.quizlet.QuizletSync.addTerm(api, termSet,
-							cl);
-					updatedTerms++;
+			for (File f : clf) {
+				progress.setProgress(pro);
+				List<Clipping> clippings = readClippingsFile(f);
+
+				if (clippings == null) {
+					pro += 10;
+					continue;
 				}
-				progress.setProgress(pro++);
+
+				if (clippings.isEmpty()) {
+					pro += 10;
+					continue;
+				}
+
+				if (clippings.size() < 2) {
+					pro += 10;
+					continue;
+				}
+
+				String book = clippings.get(0).getBook();
+				progress.setNote(book);
+
+				TermSet termSet = null;
+				String x = book.toLowerCase().replaceAll("\\W", "");
+
+				for (TermSet t : sets) {
+					if (t.getTitle().toLowerCase().replaceAll("\\W", "")
+							.equals(x)) {
+						termSet = t;
+						break;
+					}
+				}
+
+				if (termSet == null) {
+
+					addSet(api, book, clippings);
+					addedSets++;
+					pro += 10;
+					continue;
+				}
+
+				// compare against existing terms
+				boolean hasUpdated = false;
+				for (Clipping cl : clippings) {
+					if (!kindleclippings.quizlet.QuizletSync.checkExistingTerm(
+							cl, termSet)) {
+						kindleclippings.quizlet.QuizletSync.addTerm(api,
+								termSet, cl);
+						updatedTerms++;
+						hasUpdated = true;
+					}
+				}
+
+				pro += 10;
+
+				if (hasUpdated)
+					updatedSets++;
+
 			}
 
-			if (updatedTerms == 0) {
+			if (updatedTerms == 0 && addedSets == 0) {
 				JOptionPane.showMessageDialog(null,
 						"Done.\nNo new data was uploaded", "QuizletSync",
 						JOptionPane.OK_OPTION);
 			} else {
-				JOptionPane.showMessageDialog(null,
-						String.format("Done.\nAdded %d cards to existing sets",
-								updatedTerms), "QuizletSync",
-						JOptionPane.OK_OPTION);
+				if (addedSets > 0) {
+					JOptionPane
+							.showMessageDialog(
+									null,
+									String.format(
+											"Done.\nCreated %d new sets and added %d cards to %d existing sets",
+											addedSets, updatedSets,
+											updatedTerms), "QuizletSync",
+									JOptionPane.OK_OPTION);
+				} else {
+					JOptionPane.showMessageDialog(null, String.format(
+							"Done.\nAdded %d cards to %d existing sets",
+							updatedTerms, updatedSets), "QuizletSync",
+							JOptionPane.OK_OPTION);
+				}
 			}
 		} finally {
 			progress.close();
