@@ -17,10 +17,12 @@
  */
 package kindleclippings.word;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -80,7 +82,10 @@ public class QuizletSync {
 					clippings.add(l);
 				}
 			} else {
-				RTFClippingsReader r = new RTFClippingsReader(in);
+				TextClippingsReader r = cl.getName().toLowerCase()
+						.endsWith(".rtf") ? RTFClippingsReader.getRTFReader(in)
+						: new TextClippingsReader(new BufferedReader(
+								new InputStreamReader(in, "UTF-8")));
 				Clipping l;
 				while ((l = r.readClipping()) != null) {
 					String lct = l.getContent().trim();
@@ -111,7 +116,7 @@ public class QuizletSync {
 
 		JFileChooser fc = new JFileChooser();
 		fc.setFileFilter(new FileNameExtensionFilter("Word documents", "doc",
-				"rtf"));
+				"rtf", "txt"));
 		fc.setMultiSelectionEnabled(true);
 		int result = fc.showOpenDialog(null);
 		if (result != JFileChooser.APPROVE_OPTION) {

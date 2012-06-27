@@ -26,59 +26,15 @@ import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.rtf.RTFEditorKit;
 
-import kindleclippings.Clipping;
-
 class RTFClippingsReader {
 
-	private final BufferedReader reader;
-
-	private final String book;
-
-	RTFClippingsReader(InputStream rtf) throws IOException,
-			BadLocationException {
+	static TextClippingsReader getRTFReader(InputStream rtf)
+			throws IOException, BadLocationException {
 		RTFEditorKit rtfParser = new RTFEditorKit();
 		Document document = rtfParser.createDefaultDocument();
 		rtfParser.read(rtf, document, 0);
-		reader = new BufferedReader(new StringReader(document.getText(0,
-				document.getLength())));
+		return new TextClippingsReader(new BufferedReader(new StringReader(
+				document.getText(0, document.getLength()))));
 
-		// first paragraph is the book title
-		Clipping c = readClipping();
-		book = c.getContent().replaceAll("\r?\n", " ").trim();
 	}
-
-	Clipping readClipping() throws IOException {
-		String line = reader.readLine();
-		if (line == null)
-			return null;
-		// skip empty lines
-		while (line.trim().length() == 0) {
-			line = reader.readLine();
-			if (line == null)
-				return null;
-		}
-		Clipping result = new Clipping();
-		result.setBook(book);
-
-		StringBuilder content = new StringBuilder(1000);
-		content.append(line);
-		content.append("\n");
-
-		// ends on empty line
-		while (true) {
-			line = reader.readLine();
-			if (line == null)
-				break;
-
-			line = line.trim();
-			if (line.length() == 0)
-				break;
-			content.append(line);
-			content.append("\n");
-		}
-
-		result.setContent(content.toString());
-		return result;
-	}
-
 }
